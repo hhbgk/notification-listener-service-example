@@ -76,7 +76,7 @@ public class NotificationListenerExampleService extends NotificationListenerServ
                 Log.i(tag,"title: "+title +", content: "+content);
             }
         }
-        
+
         int notificationCode = matchNotificationCode(sbn);
 
         if (notificationCode != InterceptedNotificationCode.OTHER_NOTIFICATIONS_CODE) {
