@@ -10,9 +10,13 @@ import android.content.IntentFilter;
 import android.provider.Settings;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.view.View;
 import android.widget.ImageView;
 
 import androidx.appcompat.app.AppCompatActivity;
+
+import com.github.chagall.notificationlistenerexample.util.Actions;
+import com.github.chagall.notificationlistenerexample.util.NotificationUtil;
 
 /**
  * MIT License
@@ -48,8 +52,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         // Here we get a reference to the image we will modify when a notification is received
-        interceptedNotificationImageView
-                = (ImageView) this.findViewById(R.id.intercepted_notification_logo);
+        interceptedNotificationImageView = findViewById(R.id.intercepted_notification_logo);
 
         // If the user did not turn the notification listener service on we prompt him to do so
         if(!isNotificationServiceEnabled()){
@@ -60,7 +63,7 @@ public class MainActivity extends AppCompatActivity {
         // Finally we register a receiver to tell the MainActivity when a notification has been received
         imageChangeBroadcastReceiver = new ImageChangeBroadcastReceiver();
         IntentFilter intentFilter = new IntentFilter();
-        intentFilter.addAction("com.github.chagall.notificationlistenerexample");
+        intentFilter.addAction(Actions.ACTION_NOTIFICATION);
         registerReceiver(imageChangeBroadcastReceiver,intentFilter);
     }
 
@@ -89,6 +92,9 @@ public class MainActivity extends AppCompatActivity {
             case NotificationListenerExampleService.InterceptedNotificationCode.OTHER_NOTIFICATIONS_CODE:
                 interceptedNotificationImageView.setImageResource(R.drawable.other_notification_logo);
                 break;
+            case NotificationListenerExampleService.InterceptedNotificationCode.TEST_CODE:
+                interceptedNotificationImageView.setImageResource(R.mipmap.ic_launcher);
+                break;
         }
     }
 
@@ -100,12 +106,11 @@ public class MainActivity extends AppCompatActivity {
      */
     private boolean isNotificationServiceEnabled(){
         String pkgName = getPackageName();
-        final String flat = Settings.Secure.getString(getContentResolver(),
-                ENABLED_NOTIFICATION_LISTENERS);
+        final String flat = Settings.Secure.getString(getContentResolver(), ENABLED_NOTIFICATION_LISTENERS);
         if (!TextUtils.isEmpty(flat)) {
             final String[] names = flat.split(":");
-            for (int i = 0; i < names.length; i++) {
-                final ComponentName cn = ComponentName.unflattenFromString(names[i]);
+            for (String name : names) {
+                final ComponentName cn = ComponentName.unflattenFromString(name);
                 if (cn != null) {
                     if (TextUtils.equals(pkgName, cn.getPackageName())) {
                         return true;
@@ -117,6 +122,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
+     * Send a notification
+     * @param view button view
+     */
+    public void onClickNotification(View view) {
+        NotificationUtil.createNotification(getApplicationContext());
+    }
+
+    /**
      * Image Change Broadcast Receiver.
      * We use this Broadcast Receiver to notify the Main Activity when
      * a new notification has arrived, so it can properly change the
@@ -125,7 +138,7 @@ public class MainActivity extends AppCompatActivity {
     public class ImageChangeBroadcastReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            int receivedNotificationCode = intent.getIntExtra("Notification Code",-1);
+            int receivedNotificationCode = intent.getIntExtra(Actions.KEY_NOTIFICATION_CODE,-1);
             changeInterceptedNotificationImage(receivedNotificationCode);
         }
     }
