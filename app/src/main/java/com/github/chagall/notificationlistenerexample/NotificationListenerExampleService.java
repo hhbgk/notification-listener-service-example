@@ -1,6 +1,9 @@
 package com.github.chagall.notificationlistenerexample;
 
+import android.app.Notification;
 import android.content.Intent;
+import android.os.Build;
+import android.os.Bundle;
 import android.os.IBinder;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
@@ -64,6 +67,16 @@ public class NotificationListenerExampleService extends NotificationListenerServ
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
         Log.i(tag, "onNotificationPosted: " + sbn.getPackageName());
+        Notification notification = sbn.getNotification();
+        if (Build.VERSION.SDK_INT >= 19) {
+            Bundle extras = notification.extras;
+            if (extras != null) {
+                String title = extras.getString(Notification.EXTRA_TITLE, "");
+                String content = extras.getString(Notification.EXTRA_TEXT, "");
+                Log.i(tag,"title: "+title +", content: "+content);
+            }
+        }
+        
         int notificationCode = matchNotificationCode(sbn);
 
         if (notificationCode != InterceptedNotificationCode.OTHER_NOTIFICATIONS_CODE) {
