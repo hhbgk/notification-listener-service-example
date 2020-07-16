@@ -1,15 +1,24 @@
 package com.github.chagall.notificationlistenerexample;
 
 import android.app.Notification;
+import android.app.PendingIntent;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.Parcel;
+import android.os.Parcelable;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
+import android.text.TextUtils;
 import android.util.Log;
+import android.widget.RemoteViews;
 
 import com.github.chagall.notificationlistenerexample.util.Actions;
+
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * MIT License
@@ -32,6 +41,7 @@ import com.github.chagall.notificationlistenerexample.util.Actions;
  */
 public class NotificationListenerExampleService extends NotificationListenerService {
     private String tag = getClass().getSimpleName();
+
     /*
         These are the package names of the apps. for which we want to
         listen the notifications
@@ -67,15 +77,7 @@ public class NotificationListenerExampleService extends NotificationListenerServ
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
         Log.i(tag, "onNotificationPosted: " + sbn.getPackageName());
-        Notification notification = sbn.getNotification();
-        if (Build.VERSION.SDK_INT >= 19) {
-            Bundle extras = notification.extras;
-            if (extras != null) {
-                String title = extras.getString(Notification.EXTRA_TITLE, "");
-                String content = extras.getString(Notification.EXTRA_TEXT, "");
-                Log.i(tag,"title: "+title +", content: "+content);
-            }
-        }
+        handleNotification(sbn.getNotification());
 
         int notificationCode = matchNotificationCode(sbn);
 
@@ -126,5 +128,95 @@ public class NotificationListenerExampleService extends NotificationListenerServ
         } else {
             return (InterceptedNotificationCode.OTHER_NOTIFICATIONS_CODE);
         }
+    }
+
+    private void handleNotification(Notification notification) {
+        if (notification == null) {
+            Log.e(tag, "notification is null");
+            return;
+        }
+        PendingIntent pendingIntent = null;
+        // 当 API > 18 时，使用 extras 获取通知的详细信息
+        if (Build.VERSION.SDK_INT >= 19) {
+            Bundle extras = notification.extras;
+            if (extras != null) {
+                String title = extras.getString(Notification.EXTRA_TITLE, "");
+                String content = extras.getString(Notification.EXTRA_TEXT, "");
+
+                Log.i(tag, "title: " + title + ", content: " + content);
+                if (!TextUtils.isEmpty(content) && content.contains("[微信红包]")) {
+                    pendingIntent = notification.contentIntent;
+                }
+            }
+        } else {
+            // 当 API = 18 时，利用反射获取内容字段
+            List<String> textList = getNotificationText(notification);
+            if (textList != null && textList.size() > 0) {
+                for (String text : textList) {
+                    if (!TextUtils.isEmpty(text) && text.contains("[微信红包]")) {
+                        pendingIntent = notification.contentIntent;
+                        break;
+                    }
+                }
+            }
+        }
+        // send pendingIntent to open wechat
+        try {
+            if (pendingIntent != null) {
+                pendingIntent.send();
+            }
+        } catch (PendingIntent.CanceledException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private List<String> getNotificationText(Notification notification) {
+        if (null == notification) {
+            return null;
+        }
+        RemoteViews views = notification.bigContentView;
+        if (views == null) {
+            views = notification.contentView;
+        }
+        if (views == null) {
+            return null;
+        }
+        // Use reflection to examine the m_actions member of the given RemoteViews object.
+        // It's not pretty, but it works.
+        List<String> text = new ArrayList<>();
+        try {
+            Field field = views.getClass().getDeclaredField("mActions");
+            field.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            ArrayList<Parcelable> actions = (ArrayList<Parcelable>) field.get(views);
+            if (actions == null) {
+                return null;
+            }
+            // Find the setText() and setTime() reflection actions
+            for (Parcelable p : actions) {
+                Parcel parcel = Parcel.obtain();
+                p.writeToParcel(parcel, 0);
+                parcel.setDataPosition(0);
+                // The tag tells which type of action it is (2 is ReflectionAction, from the source)
+                int tag = parcel.readInt();
+                if (tag != 2) continue;
+                // View ID
+                parcel.readInt();
+                String methodName = parcel.readString();
+                if (null == methodName) {
+                    continue;
+                } else if (methodName.equals("setText")) {
+                    // Parameter type (10 = Character Sequence)
+                    parcel.readInt();
+                    // Store the actual string
+                    String t = TextUtils.CHAR_SEQUENCE_CREATOR.createFromParcel(parcel).toString().trim();
+                    text.add(t);
+                }
+                parcel.recycle();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return text;
     }
 }
